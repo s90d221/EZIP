@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ezip/models/listing.dart';
 import 'package:ezip/models/review.dart';
 import 'package:ezip/api/api_client.dart';
-import 'package:ezip/state/app_state.dart';
+import 'package:ezip/state/app_state.dart' as app; // ✅ alias로 정리
 
 class RoomDetailPage extends StatefulWidget {
   final int roomId;
@@ -20,6 +20,9 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
   late Future<Listing> _future;
   late Future<List<Review>> _futureReviews;
+
+  // ✅ 최근 본 기록을 1회만 남기기 위한 플래그(위젯 말고 State에 둬야 함)
+  bool _markedViewed = false;
 
   @override
   void initState() {
@@ -110,6 +113,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       }
       _reloadAll();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('리뷰 저장 실패: $e')));
     }
   }
@@ -131,6 +135,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       await _api.deleteReview(reviewId);
       _reloadAll();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('리뷰 삭제 실패: $e')));
     }
   }
@@ -144,14 +149,32 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         final err = snap.hasError ? snap.error.toString() : null;
         final l = snap.data;
 
+        // ✅ 데이터가 준비되면 post-frame에서 1회만 최근 본 기록
+        if (!loading && err == null && l != null && !_markedViewed) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_markedViewed) {
+              app.markViewed(l);
+              _markedViewed = true;
+            }
+          });
+        }
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('매물 상세'),
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black87,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
             actions: [
               if (!loading && l != null)
                 IconButton(icon: const Icon(Icons.edit), onPressed: () => _openEdit(l)),
               IconButton(icon: const Icon(Icons.delete_outline), onPressed: _deleteRoom),
             ],
+            bottom: const PreferredSize(
+              preferredSize: Size.fromHeight(1),
+              child: Divider(height: 1, thickness: 1, color: Color(0xFFE6E6E6)),
+            ),
           ),
           floatingActionButton: (!loading && l != null)
               ? FloatingActionButton.extended(
@@ -218,12 +241,12 @@ class _DetailBody extends StatelessWidget {
                   right: 12,
                   bottom: 12,
                   child: ValueListenableBuilder<Set<int>>(
-                    valueListenable: favoriteIds,
+                    valueListenable: app.favoriteIds,
                     builder: (_, favSet, __) {
                       final liked = favSet.contains(listing.id);
                       return _HeartOverlayButton(
                         liked: liked,
-                        onTap: () => toggleFavoriteWithItem(listing),
+                        onTap: () => app.toggleFavoriteWithItem(listing),
                       );
                     },
                   ),
@@ -256,8 +279,7 @@ class _DetailBody extends StatelessWidget {
                 ListTile(
                   dense: true,
                   leading: const Icon(Icons.place_outlined),
-                  title: Text(
-                      '위치: ${listing.lat.toStringAsFixed(5)}, ${listing.lng.toStringAsFixed(5)}'),
+                  title: Text('위치: ${listing.lat.toStringAsFixed(5)}, ${listing.lng.toStringAsFixed(5)}'),
                 ),
                 const Divider(),
               ],

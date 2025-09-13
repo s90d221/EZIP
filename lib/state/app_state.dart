@@ -5,6 +5,20 @@ import 'package:ezip/models/listing.dart';
 /// ===== Favorites State =====
 /// - favoriteIds: 영구 저장(SharedPreferences)
 /// - favoriteItems: 메모리 캐시(화면 즉시 반영용)
+// 최근 본 방 (세션/로컬 캐시)
+final recentViewed = ValueNotifier<List<Listing>>(<Listing>[]);
+
+void markViewed(Listing item, {int maxItems = 20}) {
+  final list = List<Listing>.from(recentViewed.value);
+  list.removeWhere((e) => e.id == item.id); // 중복 제거
+  list.insert(0, item);                     // 최신이 앞
+  if (list.length > maxItems) list.removeRange(maxItems, list.length);
+  recentViewed.value = list;
+}
+
+void clearRecent() {
+  recentViewed.value = <Listing>[];
+}
 
 final favoriteIds = ValueNotifier<Set<int>>(<int>{});
 final favoriteItems = ValueNotifier<Map<int, Listing>>({});

@@ -1,8 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:dio/dio.dart';
 
-import 'package:ezip/state/app_state.dart';
+import 'package:ezip/state/app_state.dart' as app;
 import 'package:ezip/shared/widgets/listing_card.dart';
 
 import 'package:ezip/models/listing.dart';
@@ -38,9 +39,14 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
   );
   late final ApiClient _api = ApiClient(_kBaseUrl);
 
+  // favoriteIds 리스너 핸들 (추가/해제용)
+  late final VoidCallback _favListener;
+
   @override
   void initState() {
     super.initState();
+    _favListener = () => setState(_rebuildMarkers);
+    app.favoriteIds.addListener(_favListener);
     _load(); // 첫 로드
   }
 
@@ -48,6 +54,7 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
   void dispose() {
     _mapController?.dispose();
     _drag.dispose();
+    app.favoriteIds.removeListener(_favListener);
     super.dispose();
   }
 
@@ -71,10 +78,10 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
         _items = list;
         _rebuildMarkers();
       });
+      _fitToAll();
     } on DioException catch (e) {
       _showSnack(
-        '목록 불러오기 실패 (${e.response?.statusCode ?? '-'})\n'
-            '${e.requestOptions.uri}',
+        '목록 불러오기 실패 (${e.response?.statusCode ?? '-'})\n${e.requestOptions.uri}',
       );
     } catch (e) {
       _showSnack('목록 불러오기 실패: $e');
@@ -85,14 +92,24 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
 
   // -------- 마커 재구성 --------
   void _rebuildMarkers() {
+    final likedSet = app.favoriteIds.value;
     _markers
       ..clear()
-      ..addAll(_items.map((e) => Marker(
-        markerId: MarkerId(e.id.toString()),
-        position: LatLng(e.lat, e.lng),
-        infoWindow: InfoWindow(title: e.shortTitle, snippet: e.priceLabel),
-        onTap: () => _onMarkerTap(e.id),
-      )));
+      ..addAll(_items.map((e) {
+        final selected = e.id == _selectedId;
+        final liked = likedSet.contains(e.id);
+        final hue = selected
+            ? BitmapDescriptor.hueAzure
+            : (liked ? BitmapDescriptor.hueRose : 275.0 /*보라톤*/);
+        return Marker(
+          markerId: MarkerId(e.id.toString()),
+          position: LatLng(e.lat, e.lng),
+          icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+          infoWindow: InfoWindow(title: e.shortTitle, snippet: e.priceLabel),
+          onTap: () => _onMarkerTap(e.id),
+        );
+      }));
+    setState(() {}); // 지도 갱신
   }
 
   void _onMarkerTap(int id) {
@@ -121,6 +138,72 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOut,
     );
+  }
+
+  Future<void> _fitToAll() async {
+    if (_mapController == null || _items.isEmpty) return;
+    final sw = LatLng(
+      _items.map((e) => e.lat).reduce((a, b) => a < b ? a : b),
+      _items.map((e) => e.lng).reduce((a, b) => a < b ? a : b),
+    );
+    final ne = LatLng(
+      _items.map((e) => e.lat).reduce((a, b) => a > b ? a : b),
+      _items.map((e) => e.lng).reduce((a, b) => a > b ? a : b),
+    );
+    await _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(LatLngBounds(southwest: sw, northeast: ne), 60),
+    );
+  }
+
+  // -------- 정렬 --------
+  Future<void> _showSortSheet() async {
+    final sel = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.new_releases_outlined),
+            title: const Text('최신순'),
+            onTap: () => Navigator.pop(context, 'latest'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.savings_outlined),
+            title: const Text('보증금 낮은순'),
+            onTap: () => Navigator.pop(context, 'deposit_asc'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.payments_outlined),
+            title: const Text('월세 낮은순'),
+            onTap: () => Navigator.pop(context, 'monthly_asc'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.square_foot_outlined),
+            title: const Text('면적 큰순'),
+            onTap: () => Navigator.pop(context, 'area_desc'),
+          ),
+        ]),
+      ),
+    );
+    if (sel == null) return;
+    setState(() {
+      switch (sel) {
+        case 'latest':
+          _items.sort((a, b) => b.id.compareTo(a.id));
+          break;
+        case 'deposit_asc':
+          _items.sort((a, b) => a.deposit.compareTo(b.deposit));
+          break;
+        case 'monthly_asc':
+          _items.sort((a, b) => a.monthly.compareTo(b.monthly));
+          break;
+        case 'area_desc':
+          _items.sort((a, b) => b.area.compareTo(a.area));
+          break;
+      }
+      _rebuildMarkers();
+    });
+    _fitToAll();
   }
 
   // -------- 테스트 시드 --------
@@ -152,7 +235,7 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
     try {
       _setBusy(true);
       for (final b in samples) {
-        await _api.createRoom(_toServerBody(b)); // 스키마 호환 전송
+        await _api.createRoom(_toServerBody(b));
       }
       await _load();
       _showSnack('테스트 매물 3개 등록 완료');
@@ -165,7 +248,6 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
     }
   }
 
-  // 서버가 모르는 키는 무시(카멜/스네이크 둘 다)
   Map<String, dynamic> _toServerBody(Map<String, dynamic> b) => {
     'type': b['type'],
     'monthly': b['monthly'],
@@ -188,8 +270,6 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('favoriteIds hash (MyPage): ${identityHashCode(favoriteIds)}');
-
     const camera = CameraPosition(
       target: LatLng(36.6289, 127.4580), // 충북대 근처
       zoom: 13.5,
@@ -204,12 +284,16 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
           compassEnabled: true,
           onMapCreated: (c) => _mapController = c,
         ),
+
+        // 상단: 필터바(검색창 제거, 글래스 스타일만 유지)
         Positioned(
           left: 0,
           right: 0,
           top: 0,
           child: _FilterBar(onRefresh: _load),
         ),
+
+        // 하단: 글래스 시트
         DraggableScrollableSheet(
           controller: _drag,
           initialChildSize: 0.38,
@@ -218,115 +302,120 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
           snap: true,
           builder: (context, scrollController) {
             _listCtrl = scrollController;
-            return DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                boxShadow: const [
-                  BoxShadow(blurRadius: 16, offset: Offset(0, -2), color: Colors.black26)
-                ],
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+            return ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 16, offset: Offset(0, -2), color: Colors.black26)
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                    child: Row(
-                      children: [
-                        Text(
-                          '학교 근처 매물',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.tune),
-                          label: const Text('정렬'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                        child: Row(
+                          children: [
+                            Text(
+                              '학교 근처 매물 · ${_items.length}개',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _showSortSheet,
+                              icon: const Icon(Icons.tune),
+                              label: const Text('정렬'),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.open_in_full),
+                              tooltip: '전체보기/축소',
+                              onPressed: _toggleSheet,
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.open_in_full),
-                          tooltip: '전체보기/축소',
-                          onPressed: _toggleSheet,
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  if (_busy)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else
-                    Expanded(
-                      child: ValueListenableBuilder<Set<int>>(
-                        valueListenable: favoriteIds,
-                        builder: (_, favSet, __) {
-                          if (_items.isEmpty) {
-                            return Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text('표시할 매물이 없어요'),
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    onPressed: _seed,
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('테스트 매물 넣기'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-
-                          return ListView.builder(
-                            controller: scrollController,
-                            itemCount: _items.length,
-                            itemExtent: _cardExtent,
-                            padding: const EdgeInsets.only(bottom: 24),
-                            itemBuilder: (context, i) {
-                              final item = _items[i];
-                              final selected = item.id == _selectedId;
-                              final likedNow = favSet.contains(item.id);
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                                child: ListingCard(
-                                  key: ValueKey(item.id),
-                                  item: item,
-                                  isSelected: selected,
-                                  liked: likedNow,
-                                  onTap: () async {
-                                    setState(() => _selectedId = item.id);
-                                    _mapController?.animateCamera(
-                                      CameraUpdate.newLatLng(LatLng(item.lat, item.lng)),
-                                    );
-                                    final changed = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => RoomDetailPage(roomId: item.id),
+                      if (_busy)
+                        const Expanded(child: Center(child: CircularProgressIndicator()))
+                      else
+                        Expanded(
+                          child: ValueListenableBuilder<Set<int>>(
+                            valueListenable: app.favoriteIds,
+                            builder: (_, favSet, __) {
+                              if (_items.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('표시할 매물이 없어요'),
+                                      const SizedBox(height: 12),
+                                      FilledButton.icon(
+                                        onPressed: _seed,
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('테스트 매물 넣기'),
                                       ),
-                                    );
-                                    if (changed == true) _load();
-                                  },
-                                  onLikeToggle: () => toggleFavorite(item.id),
-                                ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              return ListView.builder(
+                                controller: scrollController,
+                                itemCount: _items.length,
+                                itemExtent: _cardExtent,
+                                padding: const EdgeInsets.only(bottom: 24),
+                                itemBuilder: (context, i) {
+                                  final item = _items[i];
+                                  final selected = item.id == _selectedId;
+                                  final likedNow = favSet.contains(item.id);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                                    child: ListingCard(
+                                      key: ValueKey(item.id),
+                                      item: item,
+                                      isSelected: selected,
+                                      liked: likedNow,
+                                      onTap: () async {
+                                        setState(() => _selectedId = item.id);
+                                        _mapController?.animateCamera(
+                                          CameraUpdate.newLatLng(LatLng(item.lat, item.lng)),
+                                        );
+                                        final changed = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => RoomDetailPage(roomId: item.id),
+                                          ),
+                                        );
+                                        if (changed == true) _load();
+                                      },
+                                      // ✅ 로컬 찜: item과 함께 저장해야 Favorites 탭에서 보임
+                                      onLikeToggle: () => app.toggleFavoriteWithItem(item),
+                                    ),
+                                  );
+                                },
                               );
                             },
-                          );
-                        },
-                      ),
-                    ),
-                ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
@@ -336,7 +425,7 @@ class _MapAndListingsPageState extends State<MapAndListingsPage> {
   }
 }
 
-// ---------- 상단 필터 바 ----------
+// ---------- 상단 필터 바 (검색 없음!) ----------
 class _FilterBar extends StatelessWidget {
   final VoidCallback onRefresh;
   const _FilterBar({required this.onRefresh});
@@ -345,31 +434,41 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SafeArea(
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.97),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 2))],
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _DropdownBox(label: '거래', items: const ['전체', '월세', '전세']),
-              _DropdownBox(label: '가격', items: const ['전체', '~50만', '50~100만', '100만+']),
-              _DropdownBox(label: '크기', items: const ['전체', '원룸', '1.5룸', '투룸+']),
-              _DropdownBox(label: '인원', items: const ['전체', '1인', '2인', '3인+']),
-              _DropdownBox(label: '층수', items: const ['전체', '지하', '저층', '중층', '고층']),
-              _DropdownBox(label: '옵션', items: const ['전체', '반려동물', '주차', '엘리베이터']),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh),
-                label: const Text('새로고침'),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.92),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 2))
+                ],
               ),
-            ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _DropdownBox(label: '거래', items: const ['전체', '월세', '전세']),
+                    _DropdownBox(label: '가격', items: const ['전체', '~50만', '50~100만', '100만+']),
+                    _DropdownBox(label: '크기', items: const ['전체', '원룸', '1.5룸', '투룸+']),
+                    _DropdownBox(label: '인원', items: const ['전체', '1인', '2인', '3인+']),
+                    _DropdownBox(label: '층수', items: const ['전체', '지하', '저층', '중층', '고층']),
+                    _DropdownBox(label: '옵션', items: const ['전체', '반려동물', '주차', '엘리베이터']),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: onRefresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('새로고침'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
