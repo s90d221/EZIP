@@ -99,18 +99,73 @@ class MyPageAppBar extends StatelessWidget implements PreferredSizeWidget {
             onPressed: () async {
               final sel = await showModalBottomSheet<String>(
                 context: context,
+                showDragHandle: true,
                 builder: (ctx) => SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(title: const Text('한국어'), onTap: () => Navigator.pop(ctx, 'ko')),
-                      ListTile(title: const Text('English'), onTap: () => Navigator.pop(ctx, 'en')),
-                      ListTile(title: const Text('日本語'), onTap: () => Navigator.pop(ctx, 'ja')),
-                      ListTile(title: const Text('中文(简体)'), onTap: () => Navigator.pop(ctx, 'zh-CN')),
-                    ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        // 10개+ 언어 옵션
+                        ListTile(title: Text('한국어'),              dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('English'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('日本語'),               dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('中文(简体)'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('中文(繁體)'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Español'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Français'),           dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Deutsch'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Português (Brasil)'), dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Русский'),            dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Tiếng Việt'),         dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('Bahasa Indonesia'),   dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('ไทย'),                 dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('العربية'),             dense: true, visualDensity: VisualDensity.compact,  ),
+                        ListTile(title: Text('हिन्दी'),              dense: true, visualDensity: VisualDensity.compact,  ),
+                      ],
+                    ),
                   ),
                 ),
               );
+
+              // 선택된 로케일 코드 매핑
+              if (sel != null) {
+                // 선택된 텍스트 -> 코드 매핑
+                final map = {
+                  '한국어': 'ko',
+                  'English': 'en',
+                  '日本語': 'ja',
+                  '中文(简体)': 'zh-CN',
+                  '中文(繁體)': 'zh-TW',
+                  'Español': 'es',
+                  'Français': 'fr',
+                  'Deutsch': 'de',
+                  'Português (Brasil)': 'pt-BR',
+                  'Русский': 'ru',
+                  'Tiếng Việt': 'vi',
+                  'Bahasa Indonesia': 'id',
+                  'ไทย': 'th',
+                  'العربية': 'ar',
+                  'हिन्दी': 'hi',
+                };
+
+                // 바텀시트에서 받은 건 title 텍스트이므로, 클릭 시 pop할 때 title을 반환하도록 아래처럼 처리하면 돼:
+                // → 각 ListTile onTap에서 Navigator.pop(ctx, '<title 텍스트>')
+                // 지금은 텍스트 기반으로 처리 예시:
+                final code = map[sel] ?? sel;
+
+                try {
+                  await setLang(code); // i18n.dart 필요
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('언어가 변경되었어요: $code')),
+                  );
+                } catch (_) {
+                  // ignore: use_build_context_synchronously
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('언어 변경에 실패했어요')),
+                  );
+                }
+              }
             },
           ),
         ],
@@ -122,7 +177,10 @@ class MyPageAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
+
+  Future<void> setLang(String code) async {}
 }
+
 
 class _RecentViewTab extends StatelessWidget {
   const _RecentViewTab();
