@@ -57,10 +57,10 @@ class ListingCard extends StatelessWidget {
                       _Thumbnail(url: item.imageUrl),
                       // 가격 배지
                       Positioned(
-                        left: 8,
+                        left: 4,
                         top: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.55),
                             borderRadius: BorderRadius.circular(999),

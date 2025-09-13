@@ -182,12 +182,276 @@ class MyPageAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 
-class _RecentViewTab extends StatelessWidget {
+class _RecentViewTab extends StatefulWidget {
   const _RecentViewTab();
   @override
-  Widget build(BuildContext context) =>
-      const Center(child: Text('최근 본 방이 아직 없어요.'));
+  State<_RecentViewTab> createState() => _RecentViewTabState();
 }
+
+class _RecentViewTabState extends State<_RecentViewTab> {
+  static const String _kBaseUrl =
+  String.fromEnvironment('API_BASE_URL', defaultValue: 'https://api.ezip.kro.kr/api/v1/');
+  late final ApiClient _api = ApiClient(_kBaseUrl);
+
+  bool _busy = false;
+  String? _err;
+  List<Listing> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _busy = true;
+      _err = null;
+    });
+    try {
+      // 서버에서 최근(?) 목록 대용으로 최신 방 리스트를 가져와 표시
+      final list = await _api.getRooms(query: {'page': 0, 'size': 24});
+      setState(() => _items = list);
+    } catch (e) {
+      setState(() => _err = '불러오기 실패: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_busy) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_err != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_err!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh),
+                label: const Text('다시 시도'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.inbox_outlined, size: 56, color: Colors.black26),
+              SizedBox(height: 10),
+              Text('표시할 방이 아직 없어요', style: TextStyle(color: Colors.black54)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          final cross = w >= 1000 ? 3 : (w >= 640 ? 2 : 1);
+
+          return GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cross,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 16 / 10,
+            ),
+            itemCount: _items.length,
+            itemBuilder: (_, i) {
+              final it = _items[i];
+              return _RecentCard(
+                listing: it,
+                onTap: () {
+                  // TODO: 상세 연결 원하면 여기에 push
+                  // Navigator.push(context, MaterialPageRoute(builder: (_) => RoomDetailPage(roomId: it.id)));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("'${it.shortTitle}' (id=${it.id}) 눌렀어요")),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RecentCard extends StatelessWidget {
+  final Listing listing;
+  final VoidCallback? onTap;
+  const _RecentCard({required this.listing, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tags = listing.tags;
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            // 이미지 + 가격 뱃지
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    listing.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: const Color(0xFFF4F6F8),
+                      child: const Center(
+                        child: Icon(Icons.broken_image_outlined, color: Colors.black26),
+                      ),
+                    ),
+                    loadingBuilder: (ctx, child, e) {
+                      if (e == null) return child;
+                      return Container(
+                        color: const Color(0xFFF7F9FB),
+                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      );
+                    },
+                  ),
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.55),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        listing.priceLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 텍스트 영역
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 타이틀
+                    Text(
+                      listing.shortTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // 메타 (면적/층/관리비)
+                    Row(
+                      children: [
+                        const Icon(Icons.square_foot_outlined, size: 16, color: Colors.black45),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _meta(listing),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    // 태그 칩
+                    if (tags.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: -6,
+                        children: [
+                          for (final t in tags.take(2)) _MiniChip(text: t),
+                          if (tags.length > 2) _MiniChip(text: '+${tags.length - 2}', subtle: true),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _meta(Listing it) {
+    final parts = <String>[];
+    if (it.area > 0) {
+      final noDecimal = it.area.truncateToDouble() == it.area;
+      parts.add('${it.area.toStringAsFixed(noDecimal ? 0 : 1)}㎡');
+    }
+    if (it.floor != 0) parts.add('${it.floor}층');
+    if (it.maintenanceFee.isNotEmpty) parts.add('관리비 ${it.maintenanceFee}');
+    return parts.join(' · ');
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final String text;
+  final bool subtle;
+  const _MiniChip({required this.text, this.subtle = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = subtle ? Colors.black38 : const Color(0xFF2563EB);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: subtle ? Colors.black12 : const Color(0xFF2563EB).withOpacity(.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: subtle ? Colors.black26 : const Color(0xFF2563EB).withOpacity(.35)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+}
+
 
 class _FavTab extends StatelessWidget {
   const _FavTab();
