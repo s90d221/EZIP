@@ -1,0 +1,46 @@
+# ==== Secrets / Local Only ====
+android/local.properties
+**/key.properties
+**/*.jks
+**/*.keystore
+.env
+
+# ==== Android / Gradle / IDE ====
+.gradle/
+**/build/
+.idea/
+*.iml
+*.ipr
+*.iws
+**/.kotlin/
+**/.cxx/
+**/.externalNativeBuild/
+**/outputs/
+**/intermediates/
+local.properties
+
+# ==== Flutter / Dart ====
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+pubspec.lock
+coverage/
+
+# ==== OS & Misc ====
+.DS_Store
+Thumbs.db
+*.log
+*.class
+*.pyc
+*.swp
+.history
+.atom/
+.build/
+.buildlog/
+.svn/
+.swiftpm/
+migrate_working_dir/
