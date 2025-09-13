@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:ezip/models/listing.dart';
 import 'package:ezip/models/review.dart';
 import 'package:ezip/api/api_client.dart';
+import 'package:ezip/shared/widgets/trans_text.dart';
+import 'package:ezip/state/i18n.dart';
+import 'package:ezip/state/app_state.dart';
 
 class RoomDetailPage extends StatefulWidget {
   final int roomId;
@@ -57,7 +60,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   }
 
   Future<void> _openEdit(Listing l) async {
-    // RoomEditPage에서 저장 후 true 반환하면 리로드
     final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => RoomEditPage(initial: l)),
@@ -164,7 +166,12 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               ? const Center(child: CircularProgressIndicator())
               : err != null
               ? Center(child: Text('불러오기 실패: $err'))
-              : _DetailBody(listing: l!, reviewsFuture: _futureReviews, onEditReview: _createOrEditReview, onDeleteReview: _deleteReview),
+              : _DetailBody(
+            listing: l!,
+            reviewsFuture: _futureReviews,
+            onEditReview: _createOrEditReview,
+            onDeleteReview: _deleteReview,
+          ),
         );
       },
     );
@@ -195,13 +202,35 @@ class _DetailBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 이미지
+          // ===== 이미지 + ❤️ 하트 오버레이 =====
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: Image.network(
-              listing.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 48)),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Image.network(
+                    listing.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                    const Center(child: Icon(Icons.broken_image, size: 48)),
+                  ),
+                ),
+                // ✅ 오른쪽 아래 하트 버튼 (로컬 찜 상태 반영)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: ValueListenableBuilder<Set<int>>(
+                    valueListenable: favoriteIds,
+                    builder: (_, favSet, __) {
+                      final liked = favSet.contains(listing.id);
+                      return _HeartOverlayButton(
+                        liked: liked,
+                        onTap: () => toggleFavoriteWithItem(listing),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -212,9 +241,16 @@ class _DetailBody extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(listing.shortTitle, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  listing.shortTitle,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 6),
-                Text('${listing.priceLabel} · ${listing.area}㎡ · ${listing.floor}층 · 관리비 ${listing.maintenanceFee}만'),
+                Text(
+                    '${listing.priceLabel} · ${listing.area}㎡ · ${listing.floor}층 · 관리비 ${listing.maintenanceFee}만'),
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: -6, children: chips),
                 const SizedBox(height: 16),
@@ -222,7 +258,8 @@ class _DetailBody extends StatelessWidget {
                 ListTile(
                   dense: true,
                   leading: const Icon(Icons.place_outlined),
-                  title: Text('위치: ${listing.lat.toStringAsFixed(5)}, ${listing.lng.toStringAsFixed(5)}'),
+                  title: Text(
+                      '위치: ${listing.lat.toStringAsFixed(5)}, ${listing.lng.toStringAsFixed(5)}'),
                 ),
                 const Divider(),
               ],
@@ -232,7 +269,11 @@ class _DetailBody extends StatelessWidget {
           // 리뷰 섹션
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text('리뷰', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            child: Text('리뷰',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
           ),
           FutureBuilder<List<Review>>(
             future: reviewsFuture,
@@ -289,6 +330,34 @@ class _DetailBody extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 상세 이미지 위에 띄우는 하트 버튼 (ListingCard와 톤 맞춤)
+class _HeartOverlayButton extends StatelessWidget {
+  final bool liked;
+  final VoidCallback? onTap;
+  const _HeartOverlayButton({required this.liked, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF2F2F2).withOpacity(0.92), // 살짝 회색 배경
+      shape: const CircleBorder(),
+      elevation: 1,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            liked ? Icons.favorite : Icons.favorite_border,
+            size: 26,
+            color: liked ? Colors.pink : Colors.black54,
+          ),
+        ),
       ),
     );
   }
