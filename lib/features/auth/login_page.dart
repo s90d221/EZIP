@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ezip/shared/widgets/ezip_app_bar.dart';
 import 'package:ezip/state/app_state.dart';
+import 'package:ezip/state/app_state.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});

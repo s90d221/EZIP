@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:ezip/models/listing.dart';
 import 'package:ezip/models/review.dart';
 import 'package:ezip/api/api_client.dart';
-import 'package:ezip/shared/widgets/trans_text.dart';
-import 'package:ezip/state/i18n.dart';
 import 'package:ezip/state/app_state.dart';
 
 class RoomDetailPage extends StatefulWidget {

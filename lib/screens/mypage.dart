@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:ezip/shared/widgets/ezip_logo.dart';
 import 'package:ezip/state/app_state.dart';
 import 'package:ezip/shared/widgets/listing_card.dart';
-
 import 'package:ezip/api/api_client.dart';
 import 'package:ezip/models/listing.dart';
-
-import 'package:ezip/state/i18n.dart';
-
-import '../shared/widgets/trans_text.dart';
 
 class MyPage extends StatefulWidget {
   const MyPage({super.key});
@@ -89,7 +84,7 @@ class MyPageAppBar extends StatelessWidget implements PreferredSizeWidget {
           const Icon(Icons.person_outline,      // 아이콘 + "마이페이지"
               size: 20, color: Colors.black87),
           const SizedBox(width: 6),
-          TransText(
+          Text(
             '마이페이지',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
@@ -115,7 +110,6 @@ class MyPageAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
               );
-              if (sel != null) await setLang(sel); // ⬅️ i18n.dart
             },
           ),
         ],
@@ -133,7 +127,7 @@ class _RecentViewTab extends StatelessWidget {
   const _RecentViewTab();
   @override
   Widget build(BuildContext context) =>
-      const Center(child: TransText('최근 본 방이 아직 없어요.'));
+      const Center(child: Text('최근 본 방이 아직 없어요.'));
 }
 
 /// =====================
@@ -169,7 +163,7 @@ class _FavTab extends StatelessWidget {
       valueListenable: favoriteIds,
       builder: (_, favSet, __) {
         if (favSet.isEmpty) {
-          return const Center(child: TransText('찜한 방이 없어요.'));
+          return const Center(child: Text('찜한 방이 없어요.'));
         }
         return FutureBuilder<List<Listing>>(
           future: _fetchFavs(favSet),
@@ -178,11 +172,11 @@ class _FavTab extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
             if (snap.hasError) {
-              return Center(child: TransText('불러오기 실패: ${snap.error}'));
+              return Center(child: Text('불러오기 실패: ${snap.error}'));
             }
             final favs = snap.data ?? const <Listing>[];
             if (favs.isEmpty) {
-              return const Center(child: TransText('찜한 방을 찾지 못했어요.'));
+              return const Center(child: Text('찜한 방을 찾지 못했어요.'));
             }
 
             return ListView.separated(
@@ -241,9 +235,9 @@ class _ContractTab extends StatelessWidget {
         3,
             (i) => Card(
           child: ListTile(
-            title: TransText('월세 300/35  ·  계약 ${['중','완료','완료'][i]}'),
-            subtitle: const TransText('충북 청주시 ○○동, 역세권, 6층'),
-            trailing: OutlinedButton(onPressed: () {}, child: const TransText('계약서 확인')),
+            title: Text('월세 300/35  ·  계약 ${['중','완료','완료'][i]}'),
+            subtitle: const Text('충북 청주시 ○○동, 역세권, 6층'),
+            trailing: OutlinedButton(onPressed: () {}, child: const Text('계약서 확인')),
           ),
         ),
       ),
@@ -263,10 +257,10 @@ class _ProfileTab extends StatelessWidget {
           children: [
             const CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
             const SizedBox(height: 16),
-            const ListTile(title: TransText('이메일'), subtitle: Text('user@example.com')),
-            const ListTile(title: TransText('비밀번호 변경'), trailing: Icon(Icons.chevron_right)),
+            const ListTile(title: Text('이메일'), subtitle: Text('user@example.com')),
+            const ListTile(title: Text('비밀번호 변경'), trailing: Icon(Icons.chevron_right)),
             const SizedBox(height: 12),
-            TextButton(onPressed: () => isLoggedIn.value = false, child: const TransText('회원탈퇴')),
+            TextButton(onPressed: () => isLoggedIn.value = false, child: const Text('회원탈퇴')),
           ],
         ),
       ),

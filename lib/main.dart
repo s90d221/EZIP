@@ -1,15 +1,14 @@
+import 'package:ezip/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'core/app.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initAppState();
   runApp(const EZIPApp());
 }
-
-
-
 
 /// ===== 전역 상태 =====
 final ValueNotifier<bool> isLoggedIn = ValueNotifier(false);

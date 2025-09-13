@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ezip/core/constants.dart';
 import 'package:ezip/state/app_state.dart';
 import 'package:ezip/shared/widgets/ezip_app_bar.dart';
+
 import 'package:ezip/screens/map_and_listings_page.dart';
 import 'package:ezip/screens/post_room_page.dart';
 import 'package:ezip/screens/favorites_page.dart';
